@@ -1,0 +1,198 @@
+﻿# 每日自动签到 · 全架构设计文档（含评审意见 · 合并版）
+
+> 版本 v1.1-merged ｜ 目标设备：STEPX Neo
+> 内容构成：
+> 　第一部分 —— 原始设计文档 v1.0（原文保留，未改动）
+> 　第二部分 —— 评审意见
+
+---
+---
+
+# 第一部分 · 原始设计文档 v1.0
+
+# 每日自动签到 · 全架构设计文档
+
+> 版本 v1.0 ｜ 目标设备：STEPX Neo
+> 场景：每天自动打开 Amoo → 我的任务 → 点击「签到」→ 领取 A 豆 → 回执播报
+
+---
+
+## 1. 目标与边界
+
+### 1.1 目标
+
+1. 每天在固定时间（如 08:05）在设备本地自动完成一次签到动作，无需人工介入。
+2. 执行具备感知闭环：不是盲点坐标，而是「看到界面 → 判断控件位置 → 点击 → 复核结果」。
+3. 执行结果可回执：成功 / 失败 / 失败原因，并推送到 bakewell.cloud，最终在 Amoo 对话里语音播报。
+4. 出现异常（未登录、弹窗遮挡、断网、按钮文案变化）时，能自愈或安全退出，不误点其他按钮。
+
+### 1.2 明确不做
+
+- 不做任何绕过登录、破解接口、模拟设备指纹的行为。
+- 不接管其他 App，不读取与签到无关的界面内容。
+- 不追求通用 UI 自动化平台，只为这一条签到链路做工程化落地。
+
+### 1.3 硬约束
+
+| 约束 | 说明 | 影响 |
+|---|---|---|
+| 云侧无法点击 | 云端助手只能读截图、不能发点击事件 | 调度与动作必须落在设备本地 |
+| 截屏授权 | MediaProjection 每次会话需用户确认，无法无人值守 | 必须用无障碍服务自带截屏或 shell 级截屏 |
+| 后台存活 | 定制系统对后台服务管控严格 | 必须前台服务 + 电池白名单 + 自启动白名单 |
+| 分辨率/字号漂移 | 绝对像素坐标不稳定 | 节点优先、坐标兜底、坐标用相对比例 |
+
+---
+
+## 2. 三条实现路线对比
+
+| 路线 | 实现方式 | 识别能力 | 稳定性 | 开发量 | 结论 |
+|---|---|---|---|---|---|
+| A. 低代码工具 | MacroDroid / Auto.js / 按键精灵，定时 → 打开 App → 按文字点击 | 仅文本/控件匹配，无图像识别 | 中 | 0.5～1 天 | 先跑通的最小版本 |
+| B. 自研 Android 常驻 App | Kotlin + AccessibilityService + 截屏识别 + 云端指令通道 | 节点树 + 截屏 OCR + 模板匹配三级降级 | 高 | 5～8 天 | 推荐正式方案 |
+| C. 混合 | 端侧只负责截屏与点击，识别交给云端多模态模型 | 识别最灵活，延迟 2～5 秒，需上传截图 | 中 | 3～4 天 | 作为 B 的兜底通道 |
+
+推荐落地路径：用 A 在 1 天内验证「签到按钮能否被文本定位、点击后是否成功」，拿到真实控件特征；随后按 B 建设正式方案，把 C 作为识别降级链路的最后一环。
+
+---
+
+## 3. 总体架构
+
+```
+控制面（云）
+  定时调度(cron 08:05) → 指令网关(bakewell.cloud) ← 回执聚合 + Amoo 语音播报
+                 │ WebSocket 长连接（下行指令 / 上行回执）
+设备侧常驻服务（STEPX Neo）
+  ① 指令通道：心跳 / 去重 / 幂等 / HMAC 校验
+  ② 任务编排：状态机 + 重试 + 超时 + 日志
+  ③ 唤醒：Intent 拉起目标 App，等待前台稳定 500ms
+  ④ 感知：节点树 → 截屏+OCR → 模板匹配 →（云端）多模态
+  ⑤ 决策：控件定位、弹窗治理、登录态判定
+  ⑥ 动作：ACTION_CLICK（节点）→ dispatchGesture（坐标）
+  ⑦ 校验：文案 / A豆数值 / 飘字反馈，三重任一
+  ⑧ 观测：结构化日志 + 关键帧截图 + 回执上报
+```
+
+### 3.1 一次执行的时序
+
+```
+T-0     调度触发（云 cron 或设备本地 AlarmManager）
+T+0.0s  下行指令 {job:daily_checkin, date, traceId}
+T+0.1s  端侧幂等检查：当日已成功 → 回执 skipped
+T+0.3s  Intent 拉起 Amoo，等待前台窗口就绪（连续 500ms 无事件）
+T+1.5s  感知 R1：dump 节点树，寻找「我的任务 / 签到」入口
+T+2.0s  动作 A1：performAction(CLICK) 进入任务页
+T+2.8s  弹窗治理：遍历节点，命中黑名单文案则关闭
+T+3.2s  感知 R2：定位「签到」按钮（三级降级）
+T+4.0s  动作 A2：点击签到
+T+5.0s  校验 V：文案变为「已签到」或 A 豆余额增加 → 成功
+T+5.2s  截图留档，回执上报 {status:success, beans:+20, costMs:5200}
+T+6.0s  云端聚合 → Amoo 语音播报「今日签到已完成，A 豆 +20」
+```
+
+---
+
+## 4. 组件详设
+
+### 4.1 调度层
+
+| 触发源 | 实现 | 优点 | 缺点 |
+|---|---|---|---|
+| 云 cron | 已有定时能力，08:05 下发指令 | 可改时间、可远程手动触发 | 依赖设备在线 |
+| 设备本地 | AlarmManager.setExactAndAllowWhileIdle + WorkManager 兜底窗口 | 离线也能执行 | 改时间需改配置 |
+
+设计决策：云 cron 为主（08:05），设备本地闹钟为备（08:20）。端侧按 date 幂等去重，两个都触发也只执行一次。
+
+注意：不要用 setRepeating（Doze 下会被打散），用单次 setExactAndAllowWhileIdle，执行完再排下一次。
+
+### 4.2 指令通道（设备侧常驻）
+
+设备侧维护一条到 bakewell.cloud 的 WebSocket 长连接（触发式，不轮询）。
+
+- 心跳：30s ping，3 次丢失重连，指数退避（1s→2s→4s…上限 60s）。
+- 下行帧：
+
+```json
+{
+  "type": "command",
+  "cmd": "daily_checkin",
+  "traceId": "20261021-0805-7f3a",
+  "date": "2026-10-21",
+  "deadlineMs": 120000,
+  "sign": "hmac-sha256(body, deviceSecret)"
+}
+```
+
+- 上行帧（回执）：
+
+```json
+{
+  "type": "result",
+  "traceId": "20261021-0805-7f3a",
+  "status": "success",
+  "date": "2026-10-21",
+  "beansDelta": 20,
+  "costMs": 5200,
+  "attempts": 1,
+  "evidence": { "shotBefore": "...", "shotAfter": "..." },
+  "error": null
+}
+```
+
+- 安全：每条指令校验 HMAC + traceId 防重放（本地缓存最近 7 天 traceId）；设备密钥存 EncryptedSharedPreferences。
+
+### 4.3 唤醒层
+
+```kotlin
+val intent = packageManager.getLaunchIntentForPackage(TARGET_PKG)?.apply {
+    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+}
+startActivity(intent)
+```
+
+就绪判定：轮询 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED，直到 event.packageName == TARGET_PKG 且连续 500ms 无新事件，视为界面稳定。
+
+### 4.4 感知层（核心）
+
+三级降级，从最稳到最通用。
+
+#### 一级：无障碍节点树（首选，覆盖 80% 场景）
+
+```kotlin
+fun findByText(root: AccessibilityNodeInfo?, keywords: List<String>): AccessibilityNodeInfo? {
+    root ?: return null
+    val q = LinkedList<AccessibilityNodeInfo>().apply { add(root) }
+    while (q.isNotEmpty()) {
+        val n = q.poll()
+        val t = n.text?.toString()?.trim().orEmpty()
+        val d = n.contentDescription?.toString()?.trim().orEmpty()
+        if (keywords.any { t.contains(it) || d.contains(it) }) return n
+        for (i in 0 until n.childCount) n.getChild(i)?.let { q.add(it) }
+    }
+    return null
+}
+```
+
+优点：拿到的是逻辑控件，点击用 performAction(ACTION_CLICK) 不依赖坐标、不怕分辨率与字号变化。
+局限：Flutter / 自绘 View / WebView 内嵌页面可能暴露不到有效文本节点。
+
+#### 二级：截屏 + OCR（兜底，覆盖自绘界面）
+
+- 截屏通道（关键选型）：
+  - 推荐 AccessibilityService.takeScreenshot()（API 30+，声明 canTakeScreenshot 能力），无需每次弹授权框，可无人值守；受系统频率限制（约每 1s 一次，按实际测）。
+  - 不可用时降级 MediaProjection（需用户确认，仅适合调试）。
+- OCR 选型：
+  - 端侧离线：ML Kit Text Recognition v2（中文支持好、免费、离线、单帧约 100～300ms），得到文本块 + 边界框。
+  - 备选：PaddleOCR mobile（体积大但工业级稳定）。
+- 定位算法：OCR 结果里找文本等于/包含「签到」的框，取框中心；过滤条件：
+  - 框宽高比在 1.5～6 之间（按钮通常是横条）
+  - 框内文本长度 ≤ 6
+  - 排除包含「已签到」「签到记录」「签到规则」的框（负例词表）
+  - 多个候选时，取纵向最靠上 + 面积接近历史成功样本的那个
+
+```kotlin
+data class OcrHit(val text: String, val box: Rect, val confidence: Float)
+
+fun pickCheckinButton(hits: List<OcrHit>, screen: Size): OcrHit? =
+    hits.filter { h ->
+        h.confidence > 0.6f &&
+        NEGATIVE.none { h.

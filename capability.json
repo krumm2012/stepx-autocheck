@@ -1,0 +1,22 @@
+{
+  "admin": false,
+  "supabase": false,
+  "payment": false,
+  "appAuth": false,
+  "adminAuth": false,
+  "includes": {
+    "plugins": [],
+    "connectors": [
+      {
+        "connector_id": "ic_atomic_472",
+        "connector_name": "通用原子能力",
+        "version": "1.0.0"
+      },
+      {
+        "connector_id": "ic_atomic_452",
+        "connector_name": "时钟",
+        "version": "1.0.0"
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120">
+  <!-- 空态插图：等待签到的日历 + A 豆（扁平双色，主色 + 中性色） -->
+  <circle cx="80" cy="56" r="46" fill="#FEF3C7"/>
+  <rect x="44" y="30" width="72" height="62" rx="10" fill="#FFFFFF" stroke="#92400E" stroke-width="4"/>
+  <path d="M44 48 h72" stroke="#92400E" stroke-width="4"/>
+  <path d="M60 22 v12 M100 22 v12" stroke="#92400E" stroke-width="5" stroke-linecap="round"/>
+  <rect x="56" y="58" width="16" height="12" rx="3" fill="#FDE68A"/>
+  <rect x="88" y="58" width="16" height="12" rx="3" fill="#FDE68A"/>
+  <rect x="56" y="76" width="16" height="12" rx="3" fill="#FDE68A"/>
+  <path d="M90 79 l6 6 10 -12" fill="none" stroke="#166534" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="120" cy="96" rx="14" ry="11" fill="#B45309"/>
+  <ellipse cx="115" cy="92" rx="4" ry="3" fill="#FEF3C7"/>
+</svg>

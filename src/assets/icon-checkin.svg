@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- 签到助手图标：豆金底 + 日历 + 对勾（favicon / logo 同源） -->
+  <rect width="128" height="128" rx="28" fill="#92400E"/>
+  <rect x="28" y="36" width="72" height="64" rx="12" fill="none" stroke="#FEF3C7" stroke-width="7"/>
+  <path d="M28 58 h72" stroke="#FEF3C7" stroke-width="7"/>
+  <path d="M50 28 v14 M78 28 v14" stroke="#FEF3C7" stroke-width="7" stroke-linecap="round"/>
+  <path d="M52 84 l13 13 23 -27" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

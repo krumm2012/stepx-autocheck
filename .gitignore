@@ -1,0 +1,30 @@
+# Dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# Local configuration, source exports and signing credentials
+.env
+.env.*
+!.env.example
+*.local
+.local/
+capsule/signing/
+attachments/
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.pem
+*.key
+
+# Runtime and generated caches
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+graphify-out/

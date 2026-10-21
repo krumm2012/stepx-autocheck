@@ -1,0 +1,2 @@
+# Preserve the supplied source document byte-for-byte, including its CRLF lines.
+原始方案.txt -text whitespace=cr-at-eol
