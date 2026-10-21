@@ -1,7 +1,7 @@
 {
   "name": "p-42bd7ce9ad0bc85c",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "engines": {
     "node": ">=20.19.0"
@@ -15,7 +15,11 @@
     "typecheck": "node scripts/ensure-deps.mjs && tsc --noEmit",
     "deps": "node scripts/ensure-deps.mjs",
     "signing:debug": "node scripts/gen-debug-signing.mjs",
-    "setup:local": "node scripts/setup-local.mjs"
+    "setup:local": "node scripts/setup-local.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "device:start": "node scripts/device-session.mjs start",
+    "device:check": "node scripts/device-session.mjs check",
+    "device:stop": "node scripts/device-session.mjs stop"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",

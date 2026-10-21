@@ -49,10 +49,12 @@ export const DEFAULT_SETTINGS: CheckinSettings = {
   reminderMinute: 5,
   speakEnabled: true,
   hapticEnabled: true,
-  openMode: 'name',
+  // STEPX Neo's Amoo is a system app without a regular launcher intent.
+  // The exported account center provides the observed 「我的任务」 entry.
+  openMode: 'package',
   appName: 'Amoo',
-  packageName: '',
-  className: '',
+  packageName: 'com.stepos.account',
+  className: 'com.stepos.account.StepOSAccountActivity',
 }
 
 /** 「去签到」后保留的待确认窗口：超过这个时长回前台不再弹确认（分钟） */

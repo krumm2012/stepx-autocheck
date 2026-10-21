@@ -9,6 +9,12 @@
 此次为源码快照导入，**本地提交不会自动同步到 Builder**。来源校验、差异和后续迭代方式见 [本地开发说明](docs/LOCAL_DEVELOPMENT.md)。
 之前的 [方案评审](方案评审.md)、[Android 官方核实](ANDROID_FACTS.md) 和 [Python 参考模型](prototype/checkin_core.py) 已保留；参考模型未接入当前 App。
 
+## v0.1.1 真机修复
+
+已修复原生 `content` 返回值导致的安装检测误报；默认通过 STEPX 账号中心进入「我的任务」，设置页提供「使用 Amoo 默认入口」以修复旧配置。原有签到记录不清空。
+
+USB 联调与本轮实际验证边界见 [真机调试记录](docs/DEVICE_DEBUGGING.md)。
+
 ## 这个 App 做什么
 
 - **今天**：今日签到状态 → 一键打开 Amoo（可直达签到页）→ 手动点完签到回到本页确认 → 记录 + 语音播报 + 震动反馈；连续天数 / 累计 A 豆 / 本月签到概览。
@@ -35,6 +41,7 @@
 npm ci
 npm run setup:local  # 首次本地构建准备；需 JDK/keytool，只生成忽略的本机调试签名
 npm run dev        # http://127.0.0.1:5173/  → App UI
+npm test           # 设备返回值回归测试
 npm run typecheck  # 类型门禁（构建不含类型检查，两条都要跑）
 npm run build      # 产物：dist/client/（壳侧 bundle 内容）
 npm run deps       # 依赖自愈：沙箱回收后 node_modules 丢失时按需重装（dev/build/typecheck 已自动前置）

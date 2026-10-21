@@ -18,6 +18,8 @@ import { nativeLog } from '@/shared/bridge'
 /** `callTool` 的返回结构（成功与失败同一形状，用 isError 区分） */
 export interface AbilityResult {
   isError?: boolean
+  /** Device MCP returns its human-readable result in content. */
+  content?: string | null
   text?: string
   errorCode?: number | string
   errorMsg?: string
@@ -53,6 +55,7 @@ export type AbilityName =
   | 'open_app_by_package'
   | 'open_app_by_name'
   | 'check_app_installed_by_name'
+  | 'check_app_installed_by_package'
   | 'speak_text'
   // ic_atomic_452 时钟
   | 'alarm_clock_add'
