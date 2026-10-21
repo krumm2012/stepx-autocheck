@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChevronRight, Search, Trash2 } from 'lucide-react'
 
 import { callAbility, isAbilityBridgeAvailable } from '@/shared/native/abilities'
+import { getInstalledStatus } from '@/shared/lib/ability-result'
 import {
+  DEFAULT_SETTINGS,
   clearRecords,
   loadSettings,
   saveSettings,
@@ -145,12 +147,21 @@ export function SettingsPage() {
       return
     }
     try {
-      const result = await callAbility('check_app_installed_by_name', { appName: settings.appName })
-      const text = typeof result.text === 'string' ? result.text : ''
-      const installed = text.includes('已安装') && !text.includes('未安装')
+      if (settings.openMode === 'package' && !settings.packageName) {
+        toast({ title: '请先填写应用包名', tone: 'warning' })
+        return
+      }
+      const result = settings.openMode === 'package'
+        ? await callAbility('check_app_installed_by_package', { packageName: settings.packageName })
+        : await callAbility('check_app_installed_by_name', { appName: settings.appName })
+      const installed = getInstalledStatus(result)
+      if (installed === null) {
+        toast({ title: '暂时无法确认是否安装', description: '设备没有返回明确的安装状态，请稍后重试', tone: 'warning' })
+        return
+      }
       toast({
         title: installed ? `${settings.appName} 已安装` : `没找到「${settings.appName}」`,
-        description: installed ? '可以正常打开签到' : '请在设置里换成正确的应用名，或改用包名直达',
+        description: installed ? '检测到应用；能否直达签到页取决于打开方式' : '请核对应用名或包名',
         tone: installed ? 'success' : 'warning',
       })
     } catch (error) {
@@ -160,7 +171,7 @@ export function SettingsPage() {
         tone: 'danger',
       })
     }
-  }, [deviceOnly, settings.appName, toast])
+  }, [deviceOnly, settings.appName, settings.openMode, settings.packageName, toast])
 
   return (
     <div className="page space-y-3">
@@ -205,9 +216,9 @@ export function SettingsPage() {
               onChange={(checked) => patch({ openMode: checked ? 'package' : 'name' })}
               label={
                 <span>
-                  直达签到页
+                  按包名打开
                   <span className="mt-0.5 block text-caption font-normal text-muted-foreground">
-                    关闭时按应用名打开，进入任务页自己点
+                    可填写页面名；关闭时按应用显示名称打开
                   </span>
                 </span>
               }
@@ -223,11 +234,11 @@ export function SettingsPage() {
                 hint="Amoo 的 Android 包名，必填"
               />
               <Input
-                label="签到页页面名（选填）"
+                label="页面名（选填）"
                 placeholder="例如 com.example.amoo.TaskActivity"
                 value={settings.className}
                 onChange={(event) => patch({ className: event.target.value })}
-                hint="Activity 全限定类名，填了一步直达签到页"
+                hint="填写目标应用允许打开的 Activity；能否直达需真机确认"
               />
             </div>
           ) : (
@@ -241,6 +252,21 @@ export function SettingsPage() {
               />
             </div>
           )}
+          <div className="space-y-2 px-4 pb-4">
+            <Button
+              variant="outline"
+              block
+              onClick={() => patch({
+                appName: DEFAULT_SETTINGS.appName,
+                openMode: DEFAULT_SETTINGS.openMode,
+                packageName: DEFAULT_SETTINGS.packageName,
+                className: DEFAULT_SETTINGS.className,
+              })}
+            >
+              使用 Amoo 默认入口
+            </Button>
+            <p className="text-caption text-muted-foreground">打开账号中心后选择「我的任务」进行签到</p>
+          </div>
         </Card>
       </div>
 

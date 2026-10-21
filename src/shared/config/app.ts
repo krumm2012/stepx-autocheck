@@ -5,7 +5,7 @@
  */
 export const APP_NAME = '签到助手'
 
-export const APP_VERSION = '0.1.0'
+export const APP_VERSION = '0.1.1'
 
 /**
  * 文档标题兜底：页面未声明标题时使用（如初始占位页）。
