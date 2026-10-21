@@ -35,23 +35,32 @@ async function connect() {
     ws.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Cannot connect to the WebView debugger.')) }, { once: true })
   })
   let seq = 0
+  let pageLoaded = false
   const pending = new Map()
   ws.addEventListener('message', event => {
     const result = JSON.parse(event.data)
+    if (result.method === 'Page.loadEventFired') pageLoaded = true
     const task = pending.get(result.id)
     if (!task) return
     pending.delete(result.id)
     clearTimeout(task.timer)
-    result.error ? task.reject(new Error('WebView debugger rejected the request.')) : task.resolve(result.result)
+    result.error ? task.reject(new Error(`WebView debugger rejected ${task.method} (code ${result.error.code}).`)) : task.resolve(result.result)
   })
   return {
     call(method, params = {}) {
       const id = ++seq
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { pending.delete(id); reject(new Error('WebView request timed out; keep the phone unlocked.')) }, 10000)
-        pending.set(id, { resolve, reject, timer })
+        // Native ability calls may wait for the user's one-time authorization.
+        const timeoutMs = method === 'Runtime.evaluate' ? 65000 : 10000
+        const timer = setTimeout(() => { pending.delete(id); reject(new Error('WebView request timed out; unlock the phone and respond to any one-time ability prompt.')) }, timeoutMs)
+        pending.set(id, { resolve, reject, timer, method })
         ws.send(JSON.stringify({ id, method, params }))
       })
+    },
+    async waitForLoad() {
+      const deadline = Date.now() + 10000
+      while (!pageLoaded && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100))
+      if (!pageLoaded) throw new Error('Local document did not finish loading; recovery state was retained.')
     },
     close() {
       for (const task of pending.values()) { clearTimeout(task.timer); task.reject(new Error('Session closed.')) }
@@ -90,11 +99,15 @@ try {
     state = { serial, originalUrl: original.href, createdReverse, injectedScriptId: null }
     await writeFile(STATE, JSON.stringify(state), { mode: 0o600 })
     session = await connect()
+    await session.call('Page.enable')
     const injected = await session.call('Page.addScriptToEvaluateOnNewDocument', { source: sdk })
     state.injectedScriptId = injected.identifier
     await writeFile(STATE, JSON.stringify(state), { mode: 0o600 })
-    const navigation = await session.call('Page.navigate', { url: `http://127.0.0.1:${DEV_PORT}/#/settings` })
+    // A unique query guarantees a new document even when restarting from an
+    // existing local session; a hash-only navigation would keep stale modules.
+    const navigation = await session.call('Page.navigate', { url: `http://127.0.0.1:${DEV_PORT}/?usb-session=${Date.now()}#/settings` })
     if (navigation.errorText) throw new Error('The WebView could not load local Vite. Run device:stop to restore the preview.')
+    await session.waitForLoad()
     console.log('USB local session started. Page and native actions now use local source; installed APK is unchanged.')
   } else {
     const state = JSON.parse(await readFile(STATE, 'utf8'))
@@ -102,12 +115,13 @@ try {
     adb('shell', 'am', 'start', '-n', ACTIVITY)
     session = await connect()
     if (action === 'check') {
+      console.log('If the phone asks, authorize this single target-installation check on the phone.')
       const result = await session.call('Runtime.evaluate', {
-        expression: `(async()=>{if(!window.mcp||!window.capsule)throw Error('bridge missing');await window.mcp.connect();const r=await window.mcp.callTool('check_app_installed_by_package',{packageName:'com.stepos.account'});return {pageReady:!!document.querySelector('#root')?.children.length,nativeMcp:!!window.AbilityMcp,installed:!r.isError&&typeof r.content==='string'&&r.content.includes('已安装')&&!r.content.includes('未安装')};})()`,
+        expression: `(async()=>{if(!window.mcp||!window.capsule)throw Error('bridge missing');await window.mcp.connect();const r=await window.mcp.callTool('check_app_installed_by_package',{packageName:'com.stepos.account'});return {localSource:location.origin==='http://127.0.0.1:${DEV_PORT}',pageReady:!!document.querySelector('#root')?.children.length,nativeMcp:!!window.AbilityMcp,installed:!r.isError&&typeof r.content==='string'&&r.content.includes('已安装')&&!r.content.includes('未安装')};})()`,
         awaitPromise: true, returnByValue: true,
       })
       const value = result.result?.value
-      if (result.exceptionDetails || !value?.pageReady || !value?.nativeMcp || !value?.installed) throw new Error('USB smoke check failed: page, native bridge or target installation is not ready.')
+      if (result.exceptionDetails || !value?.localSource || !value?.pageReady || !value?.nativeMcp || !value?.installed) throw new Error('USB smoke check failed: local page, native bridge or target installation is not ready.')
       console.log('PASS: local page rendered, native MCP connected, account target installed.')
     } else {
       if (state.injectedScriptId) {

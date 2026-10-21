@@ -234,7 +234,7 @@ export function SettingsPage() {
                 hint="Amoo 的 Android 包名，必填"
               />
               <Input
-                label="签到页页面名（选填）"
+                label="页面名（选填）"
                 placeholder="例如 com.example.amoo.TaskActivity"
                 value={settings.className}
                 onChange={(event) => patch({ className: event.target.value })}
